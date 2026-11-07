@@ -1,5 +1,7 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::mpsc::Iter};
 
+use rand::{Rng, seq::IndexedRandom};
+use strum::{EnumIter, IntoEnumIterator};
 
 #[derive(Clone, Copy)]
 enum Color {
@@ -9,6 +11,26 @@ enum Color {
     Blue,
     Orange,
     Red,
+}
+
+#[derive(Debug, EnumIter, Clone, Copy)]
+enum Move {
+    U,UR,U2,
+    D,DR,D2,
+    L,LR,L2,
+    R,RR,R2,
+    F,FR,F2,
+    B,BR,B2,
+}
+
+impl Move {
+    fn generate_scramble<R>(size: usize, rng: &mut R) -> Vec<Self>
+    where
+        R: Rng + ?Sized
+    {
+        let possible_moves = Move::iter().collect::<Vec<Move>>();
+        possible_moves.choose_iter(&mut rand::rng()).expect("No move specified").take(size).map(|m| *m).collect()
+    }
 }
 
 impl Display for Color {
@@ -56,6 +78,7 @@ impl Display for Face {
     }
 }
 
+#[derive(Clone, Copy)]
 struct RubiksCube {
     up: Face,
     down: Face,
@@ -161,6 +184,26 @@ impl RubiksCube {
     fn rotate_y_r(&self) -> Self {
         self.rotate_y().rotate_y().rotate_y()
     }
+
+    fn execute_move(&self, m: Move) -> Self {
+        match m {
+            Move::B => self.back(),     Move::BR => self.back().back().back(),      Move::B2 => self.back().back(),
+            Move::F => self.front(),    Move::FR => self.front().front().front(),   Move::F2 => self.front().front(),
+            Move::U => self.up(),       Move::UR => self.up().up().up(),            Move::U2 => self.up().up(),
+            Move::D => self.down(),     Move::DR => self.down().down().down(),      Move::D2 => self.down().down(),
+            Move::L => self.left(),     Move::LR => self.left().left().left(),      Move::L2 => self.left().left(),
+            Move::R => self.right(),    Move::RR => self.right().right().right(),   Move::R2 => self.right().right(),
+        }
+    }
+
+    fn execute_moves(&self, moves: impl IntoIterator<Item = Move>) -> Self {
+        moves.into_iter().fold(*self, |r, m| r.execute_move(m))
+    }
+
+    fn scramble(&self) -> Self {
+
+        Self::new()
+    }
 }
 
 impl Display for RubiksCube {
@@ -190,9 +233,16 @@ impl Display for RubiksCube {
     }
 }
 
+fn random_cube() {
+    let moves = Move::generate_scramble(16, &mut rand::rng());
+    let cube = RubiksCube::new().execute_moves(moves.clone());
+    print!("Here's the random moves : ");
+    for m in moves {
+        print!("{:?} ", m);
+    }
+    println!("{}", cube);
+}
+
 fn main() {
-    let r = RubiksCube::new();
-    println!("{r}");
-    let r = r.left();
-    println!("{r}");
+    random_cube();
 }
