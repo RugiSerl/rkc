@@ -1,9 +1,9 @@
-use std::{fmt::Display, sync::mpsc::Iter};
+use std::{fmt::Display, thread::sleep};
 
 use rand::{Rng, seq::IndexedRandom};
 use strum::{EnumIter, IntoEnumIterator};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum Color {
     White,
     Yellow,
@@ -13,7 +13,7 @@ enum Color {
     Red,
 }
 
-#[derive(Debug, EnumIter, Clone, Copy)]
+#[derive(Debug, EnumIter, Clone, Copy, PartialEq)]
 enum Move {
     U,UR,U2,
     D,DR,D2,
@@ -46,7 +46,7 @@ impl Display for Color {
         write!(f, "{char}  {char}")
     }
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct Face {
     colors: [Color; 9]
 }
@@ -61,11 +61,18 @@ impl Face {
             ]
         }
     }
+
     fn rr(&self) -> Face {
         self.r().r()
     }
+
     fn rrr(&self) -> Face {
         self.r().r().r()
+    }
+
+    fn compare(&self, other: &Self) -> u8 {
+        self.colors.into_iter().zip(other.colors.into_iter())
+            .map(|(c1, c2)| if c1==c2 {1 as u8} else {0 as u8}).sum()
     }
 }
 
@@ -78,7 +85,7 @@ impl Display for Face {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct RubiksCube {
     up: Face,
     down: Face,
@@ -200,9 +207,42 @@ impl RubiksCube {
         moves.into_iter().fold(*self, |r, m| r.execute_move(m))
     }
 
-    fn scramble(&self) -> Self {
+    fn is_done(&self) -> bool {
+        *self == RubiksCube::new()
+    }
 
-        Self::new()
+    // Maybe the next 1 out of 43 252 003 274 489 856 000 combinations will be the good one :)
+    // This will effectively loop forever and run out of memory unless you're very lucky :)
+    fn bogo_solve(&mut self) -> Vec<Move> {
+        let mut res = Vec::new();
+        while !self.is_done() {
+            let m = Move::generate_scramble(1, &mut rand::rng())[0];
+            *self = self.execute_move(m);
+            res.push(m);
+        }
+        res
+    }
+
+    fn compare(&self, other: &Self) -> u8 {
+        self.up.compare(&other.up) +
+        self.down.compare(&other.down) +
+        self.left.compare(&other.left) +
+        self.right.compare(&other.right) +
+        self.front.compare(&other.front) +
+        self.back.compare(&other.back)
+    }
+
+    // Still very inefficient
+    fn gradient_solve(&mut self, target: &RubiksCube) -> Vec<Move> {
+        let mut res = Vec::new();
+        let h = |x: RubiksCube| x.compare(target);
+        while !self.is_done() {
+            let best_move = Move::iter()
+                .max_by_key(|&m| h(self.execute_move(m))).expect("No move specified in Enum");
+            *self = self.execute_move(best_move);
+            res.push(best_move);
+        }
+        res
     }
 }
 
@@ -241,6 +281,29 @@ fn random_cube() {
         print!("{:?} ", m);
     }
     println!("{}", cube);
+}
+
+fn bogo_solver() {
+    // Scramble the cube.
+    let moves = Move::generate_scramble(16, &mut rand::rng());
+    let mut cube = RubiksCube::new().execute_moves(moves);
+    println!("{}", cube);
+    let solution = cube.bogo_solve();
+    for m in solution {
+        print!("{:?}", m);
+    }
+    println!()
+}
+
+fn gradient_solver() {
+    let moves = Move::generate_scramble(16, &mut rand::rng());
+    let mut cube = RubiksCube::new().execute_moves(moves);
+    println!("{}", cube);
+    let solution = cube.gradient_solve(&RubiksCube::new());
+    for m in solution {
+        print!("{:?}", m);
+    }
+    println!()
 }
 
 fn main() {
